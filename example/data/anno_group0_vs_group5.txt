@@ -1,0 +1,10 @@
+sample_01	groups0
+sample_02	groups0
+sample_03	groups0
+sample_04	groups0
+sample_05	groups0
+sample_26	groups5
+sample_27	groups5
+sample_28	groups5
+sample_29	groups5
+sample_30	groups5
