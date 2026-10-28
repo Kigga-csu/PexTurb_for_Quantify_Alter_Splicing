@@ -1,110 +1,54 @@
-# Example Dataset
+# Example dataset
 
-This folder contains a runnable simulated example for PexTurb. It is the `seed83` simulation from the study benchmark, chosen because PexTurb performs well at all effect sizes (TPR at FPR = 5%: 0.956 at 1.1×, 0.977 at 1.25×, 0.979 at 1.5×) and the dataset is small enough to ship with the code.
+This simulated dataset provides a control group with baseline isoform expression and a case group with altered isoform expression.
 
-## Directory structure
+| Group label | Role | Samples |
+|---|---|---|
+| `groups0` | Control | `sample_01`–`sample_05` |
+| `groups5` | Case | `sample_26`–`sample_30` |
 
-```
-example/
-├── README.md                        # this file
-├── prepare_subset_gtf.py            # helper that generated simulated_annotation.gtf
-├── data/
-│   ├── simulated_tpm.txt
-│   ├── simulated_annotation.gtf
-│   ├── simulated_index.txt
-│   ├── anno_group0_vs_group5.txt
-│   ├── ground_truth_change_mat.txt
-│   └── simulated_genes.txt
-└── expected/
-    └── group0_vs_group5_pexturb.txt
-```
+## Input files
 
-## Input files (`data/`)
+These files correspond to the inputs described in the [main README](../README.md#2-pexturb-input-and-output).
 
-| File | Format | Dimensions / size | Description |
-|---|---|---|---|
-| `simulated_tpm.txt` | TSV, header | 1,041 transcripts × 40 samples (474 KB) | Isoform expression matrix. First column: transcript ID (`ENST...`, no version); remaining 40 columns: sample TPM values produced by Salmon. This is the main PexTurb input. |
-| `simulated_annotation.gtf` | GTF | 8,465 lines (3.2 MB) | Subset of Ensembl GRCh38 release 77 containing the 160 simulated genes (gene / transcript / exon records). Used to generate the exon-pair index. |
-| `anno_group0_vs_group5.txt` | TSV, no header | 10 rows (179 B) | Sample groups for one comparison: `sample_01`–`sample_05` are group 1 (`groups0`, control), `sample_26`–`sample_30` are group 2 (`groups5`, 1.5× fold change). Each row is `sampleID<TAB>group`. |
+| Input | File | Format |
+|---|---|---|
+| A: Isoform expression | `data/simulated_tpm.txt` | Tab-separated matrix with transcript IDs in the first column, sample IDs in the header, and TPM values in the remaining columns |
+| B: GTF annotation | `data/simulated_annotation.gtf` | Matching gene, transcript, and exon annotations |
+| Sample groups for `pexturb_test.py` | `data/anno_group0_vs_group5.txt` | Two tab-separated columns without a header: sample ID and group label |
 
-### `simulated_tpm.txt`
+The sample group file selects the control and case samples from the expression matrix. Its `groups0` rows appear first, so the reported `delta_psi` is mean(control PSI) minus mean(case PSI).
 
-```text
-samples	sample_05	sample_36	sample_09	...
-ENST00000336777	691.889740	436.688694	687.817398	...
-ENST00000337502	291.386979	284.906979	264.778610	...
-```
-
-The first header cell is ignored by PexTurb; column names must match the sample IDs in the annotation file.
-
-### `simulated_annotation.gtf`
-
-Generated from the full `Homo_sapiens.GRCh38.77.sorted.gtf` with:
-
-```bash
-python prepare_subset_gtf.py \
-    --tpm    data/simulated_tpm.txt \
-    --gtf    /path/to/Homo_sapiens.GRCh38.77.sorted.gtf \
-    --output data/simulated_annotation.gtf
-```
-
-The script finds all genes containing the 1,041 expressed transcripts and keeps every transcript/exon record of those genes, so the resulting index is identical to the one built from the full GTF.
-
-### `anno_group0_vs_group5.txt`
-
-```text
-sample_01	groups0
-sample_02	groups0
-...
-sample_26	groups5
-...
-sample_30	groups5
-```
-
-The file has **no header**. The group appearing first (`groups0`) is group 1, so `delta_psi > 0` means a higher retained-pair fraction in `groups0` with the current scripts (equivalently, a lower perturbed-pair fraction).
-
-## Optional / auxiliary files
-
-| File | Description |
-|---|---|
-| `simulated_index.txt` | Precomputed exon-pair index (5,552 events, 1.1 MB). Byte-identical to the output of `02_gtf_index/gtf_index.py` on the two input files above, so step 2 can be skipped. Format: `chr:exon_up+exon_down`, `gene_id`, `gene_name`, `exon_pari_idx`, `denominator_idx`. |
-| `ground_truth_change_mat.txt` | Simulated fold change matrix: 1,038 transcripts × 8 groups. Each row is a transcript; each column is one group. Groups 0–2 are null (all 1×), groups 3–7 are 1.1×, 1.25×, 1.5×, 3× and 5× (160 transcripts changed, one per simulated gene). Not used by PexTurb; provided for benchmarking (e.g. AUROC/TPR against the truth). |
-| `simulated_genes.txt` | The 160 gene symbols selected for the simulation, in one line. Provided for provenance. |
-| `prepare_subset_gtf.py` | Helper script that produced `simulated_annotation.gtf` from the full GTF. Not part of the PexTurb pipeline. |
-
-## Output file (`expected/`)
-
-| File | Description |
-|---|---|
-| `group0_vs_group5_pexturb.txt` | Expected differential EPP result for `groups0` vs `groups5`, produced by the original PexTurb test. 5,552 exon pairs + header. Columns: `chr:exon_up+exon_down`, `gene_id`, `gene_name`, `delta_psi`, `pvalue`, `fdr`. |
-
-## How to run
+## Run the example
 
 From the repository root:
 
 ```bash
 bash run_all.sh \
-    --tpm    example/data/simulated_tpm.txt \
-    --gtf    example/data/simulated_annotation.gtf \
-    --anno   example/data/anno_group0_vs_group5.txt \
-    --outdir example/output \
-    --min-group-cnt 1
+  --tpm example/data/simulated_tpm.txt \
+  --gtf example/data/simulated_annotation.gtf \
+  --anno example/data/anno_group0_vs_group5.txt \
+  --outdir example/output \
+  --min-group-cnt 1
 ```
 
-Expected output (about 5 seconds):
+The workflow generates the exon-pair index, calculates PSI, and performs the control-versus-case differential test using the scripts in `code_pexturb/`.
 
-```
-example/output/
-├── simulated_tpm_index.txt
-├── simulated_tpm_psi.txt
-└── simulated_tpm_pexturb.txt
-```
+## Output files
 
-`simulated_tpm_pexturb.txt` should match `expected/group0_vs_group5_pexturb.txt` row by row: identical `delta_psi` and a maximum p-value difference below 2.1 × 10⁻¹⁴.
+| File in `output/` | Contents |
+|---|---|
+| `simulated_tpm_index.txt` | Generated exon-pair index |
+| `simulated_tpm_psi.txt` | Exon-pair PSI matrix across samples |
+| `simulated_tpm_pexturb.txt` | Differential results with feature and gene annotations, `delta_psi`, `pvalue`, and `fdr` |
 
-## Provenance
+Column definitions and the current PSI convention are described in [Results interpretation](../README.md#33-results-interpretation). A reference differential result is provided at `expected/group0_vs_group5_pexturb.txt`.
 
-- Simulation dataset: `/data5/lab/wangshixian/IsoMantis_simulation/wsx_test/seed83`
-- Annotation: Ensembl GRCh38 release 77 (`Homo_sapiens.GRCh38.77.sorted.gtf`)
-- Quantification: Salmon 1.4.0
-- The original FASTQ files are about 3.2 GB per seed and are not included.
+## Auxiliary files
+
+These files are not needed for the command above:
+
+- `data/simulated_index.txt`: precomputed exon-pair index for use with `code_pexturb/calc_psi.py`.
+- `data/ground_truth_change_mat.txt`: transcript fold changes used in the simulation.
+- `data/simulated_genes.txt`: genes included in the simulation.
+- `prepare_subset_gtf.py`: helper used to construct the example GTF subset.

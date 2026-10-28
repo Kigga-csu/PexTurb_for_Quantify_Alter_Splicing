@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# PexTurb 核心工具流（第 2–4 步）：GTF 建索引 -> 算 EPP/PSI -> 差异检验
+# PexTurb 核心流程：GTF 建索引 -> 算 EPP/PSI -> 差异检验
 #
-# 第 1 步 salmon 见 01_salmon/（需要 FASTQ，通常单独跑一次）。
+# 从 FASTQ 开始时，先使用 01_salmon/ 量化转录本表达。
 #
 # 用法:
 #   bash run_all.sh \
@@ -12,7 +12,7 @@
 #       [--min-group-cnt 1]
 #
 # anno 格式: 两列 sample<TAB>group，且必须恰好两组。
-#   group1（文件里先出现的那组）作为分子，delta = mean(group1) - mean(group2)。
+#   group1 是文件里先出现的那组，delta = mean(group1) - mean(group2)。
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -21,7 +21,7 @@ TPM=""
 GTF=""
 ANNO=""
 OUTDIR="result"
-MIN_GROUP_CNT=1          # 与服务器版 pexturb_test.py 默认值一致
+MIN_GROUP_CNT=1
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -48,22 +48,19 @@ OUT="$OUTDIR/${PREFIX}_pexturb.txt"
 echo "==========================================================="
 echo " [1/3] 根据 GTF 建事件索引 (gtf_index.py)"
 echo "==========================================================="
-python "$HERE/02_gtf_index/gtf_index.py" \
+python "$HERE/code_pexturb/gtf_index.py" \
     --tpm "$TPM" --gtf "$GTF" --index "$INDEX"
 
 echo "==========================================================="
 echo " [2/3] 计算 EPP/PSI (calc_psi.py)"
 echo "==========================================================="
-python "$HERE/03_psi/calc_psi.py" \
+python "$HERE/code_pexturb/calc_psi.py" \
     --tpm "$TPM" --index "$INDEX" --psi "$PSI"
 
 echo "==========================================================="
-echo " [3/3] 差异检验 (pexturb_test.py, 服务器版)"
+echo " [3/3] 差异检验 (pexturb_test.py)"
 echo "==========================================================="
-# 服务器版 pexturb_test.py 顶部有 `from gtf_index import read_gtf`，
-# 因此运行时需要把 02_gtf_index 加进 PYTHONPATH。
-PYTHONPATH="$HERE/02_gtf_index${PYTHONPATH:+:$PYTHONPATH}" \
-python "$HERE/04_pexturb_test/pexturb_test.py" \
+python "$HERE/code_pexturb/pexturb_test.py" \
     --psi "$PSI" --anno "$ANNO" --output "$OUT" \
     --min_group_cnt "$MIN_GROUP_CNT"
 

@@ -37,18 +37,17 @@ conda install --override-channels -c conda-forge -c bioconda \
 
 ## 2. PexTurb input and output
 
-Conceptually, PexTurb uses an isoform expression matrix **A** and an exon-pair index **B** to generate a PSI matrix. Sample group labels are additionally required for differential analysis:
+PexTurb requires an **isoform expression matrix (A)** and a matching **GTF annotation (B)** to generate an exon-pair PSI matrix. A **sample group annotation** is additionally required by `pexturb_test.py` to compare control and case samples.
 
-```text
-B = generate_index(GTF, A)
-X = PexTurb(A, B, sample_groups)
-```
+The workflow follows three steps:
 
-This notation summarizes the workflow; the executable interface consists of the command-line scripts shown in Section 3. The index is generated from the GTF and uses the transcript IDs and row order in **A** to locate expression values.
+1. `gtf_index.py` uses the expression matrix and GTF to generate an exon-pair index.
+2. `calc_psi.py` uses the expression matrix and generated index to calculate PSI.
+3. `pexturb_test.py` uses the PSI matrix and sample group annotation for differential testing.
 
 ### A: Isoform expression
 
-**A** is a tab-separated isoform expression matrix with a header. The first column contains transcript IDs; each subsequent column contains expression values for one sample. Transcript IDs and sample IDs must be unique, and expression values must be finite and nonnegative. TPM or FPKM values can be used; the supplied example contains Salmon-derived TPM values.
+A tab-separated matrix with a header. The first column contains transcript IDs, and each subsequent column contains TPM or FPKM values for one sample. Transcript IDs and sample IDs must be unique; expression values must be finite and nonnegative.
 
 ```text
 transcript_id	sample_01	sample_02	sample_03
@@ -56,55 +55,34 @@ ENST00000336777	691.889740	436.688694	687.817398
 ENST00000337502	291.386979	284.906979	264.778610
 ```
 
-The first header cell is a label; the other header cells are sample IDs. Version suffixes in expression-matrix transcript IDs, such as `.3` in `ENST00000336777.3`, are removed when matching transcripts to the GTF.
+Transcript version suffixes, such as `.3` in `ENST00000336777.3`, are removed when matching expression-matrix transcript IDs to the GTF.
 
-### B: Exon-pair index
+### B: GTF annotation
 
-**B** links each exon-pair feature to the relevant isoforms in **A**. Generate it using the transcriptome annotation corresponding to the expression matrix:
+A GTF file describing the genes, transcripts, and exons in the reference used for isoform quantification. It must contain `gene`, `transcript`, and `exon` records with transcript IDs matching the expression matrix. The current parser supports chromosomes `1`–`22`, `X`, and `Y`, with or without the `chr` prefix.
 
-```bash
-python 02_gtf_index/gtf_index.py \
-  --tpm expression.tsv \
-  --gtf annotation.gtf \
-  --index index.tsv
-```
+`gtf_index.py` generates the exon-pair index from these two inputs. The index is an intermediate file created by the workflow.
 
-The GTF should contain `gene`, `transcript`, and `exon` records. The example uses Ensembl GRCh38 release 77. The current parser supports chromosomes `1`–`22`, `X`, and `Y`, with or without the `chr` prefix.
+### Sample group annotation for differential testing
 
-The index is a tab-separated file with five columns:
-
-| Column | Contents |
-|---|---|
-| `chr:exon_up+exon_down` | Chromosome and coordinates of the exon pair; equivalent pairs can be grouped with semicolons |
-| `gene_id` | Gene identifier |
-| `gene_name` | Gene name, or gene ID when a name is unavailable |
-| `exon_pari_idx` | Comma-separated, zero-based expression-row indices for isoforms retaining both target exons; the spelling matches the file header |
-| `denominator_idx` | Comma-separated, zero-based expression-row indices for isoforms sharing at least one of the four target exon-boundary coordinates |
-
-An index can be reused when transcript identities, row order, and annotation are unchanged. Regenerate it after filtering or reordering transcript rows. A precomputed example index is provided at `example/data/simulated_index.txt`.
-
-### Sample group annotation
-
-Differential analysis requires a tab-separated file with two columns and **no header**. Each row gives a sample ID and its group. Supply exactly two groups; sample IDs must match columns in **A**.
+`pexturb_test.py` requires a tab-separated file with two columns and **no header**: sample ID and group. Supply exactly two groups, with sample IDs matching columns in the PSI matrix.
 
 ```text
 sample_01	control
 sample_02	control
-sample_26	treated
-sample_27	treated
+sample_26	case
+sample_27	case
 ```
 
-The group appearing first is group 1. The reported effect size is `delta_psi = mean(PSI in group 1) − mean(PSI in group 2)`. The expression matrix may include additional samples; the differential test uses the samples listed for the two groups.
+Group labels can be any two distinct names. The group appearing first is group 1, and `delta_psi = mean(PSI in group 1) − mean(PSI in group 2)`. Only the samples listed in this file are used for the differential test.
 
-### C: Output — X = PexTurb(A, B, sample_groups)
+### PexTurb output
 
-**X** is a differential result table containing exon-pair identifiers, gene annotations, `delta_psi`, `pvalue`, and `fdr`. The workflow also saves the exon-pair-by-sample PSI matrix and the index used to calculate it.
-
-| Output | Contents |
+| Output file | Contents |
 |---|---|
-| Exon-pair index | Features and their expression-row indices |
-| PSI matrix | Exon-pair features as rows and samples as columns, preceded by three feature annotation columns |
-| Differential result **X** | Effect size and statistical significance for each tested feature |
+| Exon-pair index | Generated intermediate file linking exon-pair features to transcript rows in the expression matrix |
+| PSI matrix | Exon-pair features as rows and samples as columns, preceded by feature and gene annotations |
+| Differential result | Exon-pair identifiers, gene annotations, `delta_psi`, `pvalue`, and `fdr` |
 
 Output filenames and column definitions are explained in Section 3.3.
 
@@ -112,21 +90,22 @@ Output filenames and column definitions are explained in Section 3.3.
 
 ### 3.1 Example input data
 
-The repository includes a **simulated RNA-seq dataset** (`seed83`) containing 1,041 expressed transcripts from 160 simulated genes and 40 samples (eight groups with five replicates each). The example compares five `groups0` samples with five `groups5` samples, corresponding to the 1.5-fold-change simulation setting.
+The simulated example includes a **control group** with baseline isoform expression and a **case group** with simulated changes in isoform expression.
 
-The example begins with the Salmon-derived TPM matrix. The original simulated FASTQ files are not included.
+| Group label in the annotation file | Role | Samples |
+|---|---|---|
+| `groups0` | Control: baseline expression | `sample_01`–`sample_05` |
+| `groups5` | Case: altered isoform expression | `sample_26`–`sample_30` |
 
-| File | Description |
-|---|---|
-| `example/data/simulated_tpm.txt` | Isoform expression matrix: 1,041 transcripts × 40 samples |
-| `example/data/simulated_annotation.gtf` | GTF subset covering the 160 simulated genes |
-| `example/data/anno_group0_vs_group5.txt` | Two-group sample annotation: five control and five treated samples |
-| `example/data/simulated_index.txt` | Optional precomputed index containing 5,552 exon-pair features |
-| `example/data/ground_truth_change_mat.txt` | Simulated transcript fold changes for benchmarking |
-| `example/data/simulated_genes.txt` | Gene symbols selected for the simulation |
-| `example/expected/group0_vs_group5_pexturb.txt` | Reference differential result for the example comparison |
+Use the following three files from `example/data/`:
 
-See [example/README.md](example/README.md) for further details about the example data.
+| Input | File | Structure |
+|---|---|---|
+| A: Isoform expression (`--tpm`) | `simulated_tpm.txt` | Transcript IDs in the first column; sample IDs in the header; TPM values in the remaining columns |
+| B: GTF annotation (`--gtf`) | `simulated_annotation.gtf` | Gene, transcript, and exon annotations matching the expression matrix |
+| Sample groups for differential testing (`--anno`) | `anno_group0_vs_group5.txt` | Two columns without a header: sample ID and group label |
+
+The group file selects the control and case samples for the differential test.
 
 ### 3.2 Running PexTurb
 
@@ -151,7 +130,7 @@ Create the output directory and generate the index:
 ```bash
 mkdir -p example/output
 
-python 02_gtf_index/gtf_index.py \
+python code_pexturb/gtf_index.py \
   --tpm example/data/simulated_tpm.txt \
   --gtf example/data/simulated_annotation.gtf \
   --index example/output/simulated_tpm_index.txt
@@ -160,7 +139,7 @@ python 02_gtf_index/gtf_index.py \
 Calculate the PSI matrix:
 
 ```bash
-python 03_psi/calc_psi.py \
+python code_pexturb/calc_psi.py \
   --tpm example/data/simulated_tpm.txt \
   --index example/output/simulated_tpm_index.txt \
   --psi example/output/simulated_tpm_psi.txt
@@ -171,7 +150,7 @@ To use the precomputed index, skip index generation and replace the `--index` pa
 Perform the differential test:
 
 ```bash
-PYTHONPATH=02_gtf_index python 04_pexturb_test/pexturb_test.py \
+python code_pexturb/pexturb_test.py \
   --psi example/output/simulated_tpm_psi.txt \
   --anno example/data/anno_group0_vs_group5.txt \
   --output example/output/simulated_tpm_pexturb.txt \
@@ -252,11 +231,11 @@ example/output/
 
 | File | Explanation |
 |---|---|
-| `simulated_tpm_index.txt` | The exon-pair index **B**, generated from the example expression matrix and GTF |
-| `simulated_tpm_psi.txt` | PSI matrix with feature identifiers, `gene_id`, and `gene_name` in the first three columns, followed by the 40 sample columns; undefined PSI values are written as `NA` |
-| `simulated_tpm_pexturb.txt` | Differential result **X** for `groups0` versus `groups5`, with one row per tested exon-pair feature |
+| `simulated_tpm_index.txt` | Intermediate exon-pair index generated from the expression matrix and GTF |
+| `simulated_tpm_psi.txt` | PSI matrix with feature identifiers, `gene_id`, and `gene_name` in the first three columns, followed by sample columns; undefined PSI values are written as `NA` |
+| `simulated_tpm_pexturb.txt` | Control-versus-case differential results, with one row per tested exon-pair feature |
 
-**X contains the following columns:**
+**The differential result file contains the following columns:**
 
 | Column | Meaning |
 |---|---|
@@ -267,7 +246,7 @@ example/output/
 | `pvalue` | Two-sided Welch t-test p-value after clipping PSI to [0.001, 0.999] and applying the logit transformation |
 | `fdr` | Benjamini–Hochberg adjusted p-value across tested features |
 
-The supplied reference result contains **5,552 tested features**, of which **378 have FDR < 0.05**. These counts describe the stored example result; statistical significance alone does not measure accuracy against the simulation ground truth. Features with too few non-missing values in either group are excluded from testing.
+Use `fdr < 0.05` to select significant features. Features with fewer non-missing values than `--min-group-cnt` in either group are excluded from testing.
 
 **Current output convention.** The manuscript defines EPP PSI as the perturbed-isoform fraction, as shown in Description and Figure 1. The current `calc_psi.py` instead writes the retained-pair fraction, which is its complement: `EPP PSI = 1 − output PSI`. Consequently, a positive `delta_psi` in the current output indicates greater pair retention in group 1; the corresponding EPP change has the opposite sign. This distinction applies to interpreting effect direction.
 
@@ -281,11 +260,9 @@ PexTurb/
 │   ├── build_salmon_index.sh           # build the Salmon index
 │   ├── run_salmon.sh                   # quantify paired- or single-end samples
 │   └── build_tpm_matrix.py             # merge quant.sf files into a TPM matrix
-├── 02_gtf_index/
-│   └── gtf_index.py                    # generate exon-pair indices
-├── 03_psi/
-│   └── calc_psi.py                     # calculate the PSI matrix
-├── 04_pexturb_test/
+├── code_pexturb/
+│   ├── gtf_index.py                    # generate exon-pair indices
+│   ├── calc_psi.py                     # calculate the PSI matrix
 │   └── pexturb_test.py                 # differential analysis and FDR correction
 ├── example/
 │   ├── README.md
@@ -299,4 +276,5 @@ PexTurb/
 
 ## 4. Contact
 
-For questions or bug reports, please contact [234701007@csu.edu.cn](mailto:234701007@csu.edu.cn).
+- Shixian Wang: [234701007@csu.edu.cn](mailto:234701007@csu.edu.cn); [wsx202017455@gmail.com](mailto:wsx202017455@gmail.com)
+- Hong-Dong Li: [hongdong@csu.edu.cn](mailto:hongdong@csu.edu.cn)
