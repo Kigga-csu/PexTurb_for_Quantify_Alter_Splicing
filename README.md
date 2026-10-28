@@ -37,7 +37,9 @@ conda install --override-channels -c conda-forge -c bioconda \
 
 ## 2. PexTurb input and output
 
-PexTurb requires an **isoform expression matrix (A)** and a matching **GTF annotation (B)** to generate an exon-pair PSI matrix. A **sample group annotation** is additionally required by `pexturb_test.py` to compare control and case samples.
+### 2.1 Input
+
+PexTurb requires an **isoform expression matrix (A)** and a matching **GTF annotation (B)** to generate an exon-pair PSI matrix. A **sample group annotation (C)** is additionally required by `pexturb_test.py` to compare control and case samples.
 
 The workflow follows three steps:
 
@@ -45,7 +47,7 @@ The workflow follows three steps:
 2. `calc_psi.py` uses the expression matrix and generated index to calculate PSI.
 3. `pexturb_test.py` uses the PSI matrix and sample group annotation for differential testing.
 
-### A: Isoform expression
+#### A: Isoform expression
 
 A tab-separated matrix with a header. The first column contains transcript IDs, and each subsequent column contains TPM or FPKM values for one sample. Transcript IDs and sample IDs must be unique; expression values must be finite and nonnegative.
 
@@ -57,13 +59,13 @@ ENST00000337502	291.386979	284.906979	264.778610
 
 Transcript version suffixes, such as `.3` in `ENST00000336777.3`, are removed when matching expression-matrix transcript IDs to the GTF.
 
-### B: GTF annotation
+#### B: GTF annotation
 
 A GTF file describing the genes, transcripts, and exons in the reference used for isoform quantification. It must contain `gene`, `transcript`, and `exon` records with transcript IDs matching the expression matrix. The current parser supports chromosomes `1`–`22`, `X`, and `Y`, with or without the `chr` prefix.
 
 `gtf_index.py` generates the exon-pair index from these two inputs. The index is an intermediate file created by the workflow.
 
-### Sample group annotation for differential testing
+#### C: Sample group annotation
 
 `pexturb_test.py` requires a tab-separated file with two columns and **no header**: sample ID and group. Supply exactly two groups, with sample IDs matching columns in the PSI matrix.
 
@@ -76,7 +78,7 @@ sample_27	case
 
 Group labels can be any two distinct names. The group appearing first is group 1, and `delta_psi = mean(PSI in group 1) − mean(PSI in group 2)`. Only the samples listed in this file are used for the differential test.
 
-### PexTurb output
+### 2.2 Output
 
 | Output file | Contents |
 |---|---|
@@ -103,7 +105,7 @@ Use the following three files from `example/data/`:
 |---|---|---|
 | A: Isoform expression (`--tpm`) | `simulated_tpm.txt` | Transcript IDs in the first column; sample IDs in the header; TPM values in the remaining columns |
 | B: GTF annotation (`--gtf`) | `simulated_annotation.gtf` | Gene, transcript, and exon annotations matching the expression matrix |
-| Sample groups for differential testing (`--anno`) | `anno_group0_vs_group5.txt` | Two columns without a header: sample ID and group label |
+| C: Sample group annotation (`--anno`) | `anno_group0_vs_group5.txt` | Two columns without a header: sample ID and group label |
 
 The group file selects the control and case samples for the differential test.
 

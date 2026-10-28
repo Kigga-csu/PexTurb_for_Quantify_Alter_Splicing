@@ -9,13 +9,13 @@ This simulated dataset provides a control group with baseline isoform expression
 
 ## Input files
 
-These files correspond to the inputs described in the [main README](../README.md#2-pexturb-input-and-output).
+These files correspond to the inputs described in the [main README](../README.md#21-input).
 
 | Input | File | Format |
 |---|---|---|
 | A: Isoform expression | `data/simulated_tpm.txt` | Tab-separated matrix with transcript IDs in the first column, sample IDs in the header, and TPM values in the remaining columns |
 | B: GTF annotation | `data/simulated_annotation.gtf` | Matching gene, transcript, and exon annotations |
-| Sample groups for `pexturb_test.py` | `data/anno_group0_vs_group5.txt` | Two tab-separated columns without a header: sample ID and group label |
+| C: Sample group annotation | `data/anno_group0_vs_group5.txt` | Two tab-separated columns without a header: sample ID and group label; used by `pexturb_test.py` |
 
 The sample group file selects the control and case samples from the expression matrix. Its `groups0` rows appear first, so the reported `delta_psi` is mean(control PSI) minus mean(case PSI).
 
